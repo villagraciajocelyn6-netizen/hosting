@@ -1,31 +1,23 @@
-# 🐍 Python Script Executor
+# 🐍 Python Script Executor - Live Terminal
 
-A secure web application that allows users to upload and execute Python scripts in a sandboxed environment.
+A web application for executing Python scripts with real-time streaming output.
 
 ## Features
 
-- ✅ Upload Python (.py) files through web interface
-- ✅ Automatic execution in sandboxed environment
-- ✅ 10-second timeout protection
-- ✅ Security filters for dangerous code
-- ✅ Real-time output display
-- ✅ Execution logging
-- ✅ Automatic file cleanup after execution
-- ✅ Responsive web design
-
-## Security Features
-
-- Blocks dangerous operations (os.system, subprocess, eval, exec)
-- Restricted import system (only safe modules allowed)
-- File size limit (5MB)
-- Execution timeout (10 seconds)
-- Temporary isolated execution environment
-- Automatic file deletion after execution
+- Upload Python (.py) files through web interface
+- Live streaming terminal output as scripts execute
+- Real-time display of stdout and stderr
+- No code restrictions or filtering
+- 10-second execution timeout
+- Automatic file cleanup after execution
+- Execution logging
+- Terminal-style output display
 
 ## Technology Stack
 
 - **Backend**: Flask, Python 3.11+
-- **Process Management**: subprocess with timeout
+- **Process Management**: subprocess.Popen with streaming
+- **Real-time Communication**: Server-Sent Events (SSE)
 - **Web Server**: Gunicorn
 - **Frontend**: HTML, CSS, Vanilla JavaScript
 
