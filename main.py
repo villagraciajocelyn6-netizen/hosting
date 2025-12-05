@@ -25,8 +25,13 @@ def log_to_console(message, level="INFO"):
     """Log messages directly to console/terminal with timestamp"""
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     log_message = f"[{timestamp}] [{level}] {message}"
-    print(log_message, flush=True)
+    # Print to both stdout and stderr to ensure visibility
+    print(log_message, file=sys.stdout)
     sys.stdout.flush()
+    # Also print important messages to stderr
+    if level in ["ERROR", "WARNING"]:
+        print(log_message, file=sys.stderr)
+        sys.stderr.flush()
 
 @app.route('/')
 def index():
@@ -219,112 +224,6 @@ def execute_stream(filepath):
     
     return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
-@app.route('/logs')
-def view_logs():
-    """Info page explaining console logging"""
-    log_to_console("/logs endpoint accessed")
-    return """
-    <html>
-    <head>
-        <title>Console Logging Information</title>
-        <style>
-            body {
-                font-family: 'Courier New', monospace;
-                background: #1e1e1e;
-                color: #d4d4d4;
-                padding: 40px;
-                line-height: 1.6;
-            }
-            .container {
-                max-width: 800px;
-                margin: 0 auto;
-                background: #252526;
-                padding: 30px;
-                border-radius: 8px;
-            }
-            h1 { color: #4ec9b0; }
-            h2 { color: #569cd6; margin-top: 30px; }
-            .info { background: #2d2d30; padding: 15px; border-left: 4px solid #4ec9b0; margin: 20px 0; }
-            code { background: #1e1e1e; padding: 2px 6px; border-radius: 3px; color: #ce9178; }
-            ul { margin-left: 20px; }
-            a { color: #569cd6; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>📋 Console Logging Information</h1>
-            
-            <div class="info">
-                <strong>ℹ️ All execution logs are now displayed in the terminal/console in real-time!</strong>
-            </div>
-            
-            <h2>Where to View Logs</h2>
-            <p>All logs are printed directly to <code>stdout</code> and can be viewed in:</p>
-            <ul>
-                <li><strong>Development:</strong> Your terminal where you run <code>python main.py</code></li>
-                <li><strong>Production (Gunicorn):</strong> Server logs or stdout redirection</li>
-                <li><strong>Docker/Container:</strong> <code>docker logs [container-name]</code></li>
-                <li><strong>Render.com:</strong> View logs in the Render dashboard under "Logs" tab</li>
-            </ul>
-            
-            <h2>Log Format</h2>
-            <p>Each log entry includes:</p>
-            <ul>
-                <li><strong>Timestamp:</strong> [YYYY-MM-DD HH:MM:SS.mmm]</li>
-                <li><strong>Level:</strong> [INFO|ERROR|WARNING|OUTPUT|CLEANUP]</li>
-                <li><strong>Message:</strong> Detailed information about the event</li>
-            </ul>
-            
-            <h2>What Gets Logged</h2>
-            <ul>
-                <li>✓ File upload events</li>
-                <li>✓ File validation and security checks</li>
-                <li>✓ Script execution start/end</li>
-                <li>✓ Every line of stdout (script output)</li>
-                <li>✓ Every line of stderr (errors/warnings)</li>
-                <li>✓ Process information (PID, return code)</li>
-                <li>✓ Execution time and performance metrics</li>
-                <li>✓ File cleanup operations</li>
-                <li>✓ Errors and exceptions</li>
-            </ul>
-            
-            <h2>Example Log Output</h2>
-            <pre style="background: #1e1e1e; padding: 15px; border-radius: 4px; overflow-x: auto;">
-[2025-12-04 19:59:23.456] [INFO] ================================================================================
-[2025-12-04 19:59:23.457] [INFO] FILE UPLOAD REQUEST RECEIVED
-[2025-12-04 19:59:23.458] [INFO] Original filename: test_script.py
-[2025-12-04 19:59:23.459] [INFO] File saved successfully: a1b2c3d4_test_script.py
-[2025-12-04 19:59:23.460] [INFO] File size: 1234 bytes
-[2025-12-04 19:59:23.461] [INFO] ================================================================================
-[2025-12-04 19:59:23.500] [INFO] SCRIPT EXECUTION STARTED
-[2025-12-04 19:59:23.501] [INFO] Process started with PID: 12345
-[2025-12-04 19:59:23.502] [OUTPUT] [STDOUT] Hello, World!
-[2025-12-04 19:59:23.503] [INFO] Process completed with return code: 0
-[2025-12-04 19:59:23.504] [INFO] Execution time: 0.125 seconds
-[2025-12-04 19:59:23.505] [CLEANUP] File deleted: uploads/a1b2c3d4_test_script.py</pre>
-            
-            <h2>Viewing Logs on Render.com</h2>
-            <ol>
-                <li>Go to your Render dashboard</li>
-                <li>Select your service</li>
-                <li>Click on the "Logs" tab</li>
-                <li>View real-time logs streaming</li>
-            </ol>
-            
-            <div class="info" style="border-left-color: #569cd6;">
-                <strong>💡 Tip:</strong> Logs are printed with <code>flush=True</code> to ensure immediate visibility, 
-                even when buffering is enabled.
-            </div>
-            
-            <p style="margin-top: 40px;">
-                <a href="/">← Back to Executor</a>
-            </p>
-        </div>
-    </body>
-    </html>
-    """
-
 @app.route('/health')
 def health():
     log_to_console("Health check performed")
@@ -332,13 +231,21 @@ def health():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
-    log_to_console("=" * 80)
-    log_to_console("PYTHON SCRIPT EXECUTOR - STARTING")
+    
+    # Startup banner
+    print("\n" + "=" * 80, flush=True)
+    print("╔═══════════════════════════════════════════════════════════════════════════════╗", flush=True)
+    print("║              PYTHON SCRIPT EXECUTOR - STARTING SERVER                        ║", flush=True)
+    print("╚═══════════════════════════════════════════════════════════════════════════════╝", flush=True)
+    print("=" * 80, flush=True)
+    
     log_to_console(f"Port: {port}")
-    log_to_console(f"Python version: {sys.version}")
+    log_to_console(f"Python version: {sys.version.split()[0]}")
     log_to_console(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
     log_to_console(f"Max file size: {app.config['MAX_CONTENT_LENGTH'] / (1024*1024)}MB")
     log_to_console(f"Execution timeout: {TIMEOUT} seconds")
     log_to_console("Logging mode: CONSOLE OUTPUT (Real-time)")
     log_to_console("=" * 80)
+    print("\n🚀 Server ready! Waiting for requests...\n", flush=True)
+    
     app.run(host='0.0.0.0', port=port, debug=False)
