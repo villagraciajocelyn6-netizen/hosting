@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Script Executor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐍 Python Script Executor</h1>
+            <p>Upload and execute Python scripts safely in a sandboxed environment</p>
+        </header>
+
+        <div class="upload-section">
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="file-input-wrapper">
+                    <label for="fileInput" class="file-label">
+                        <span id="fileName">Choose a .py file</span>
+                    </label>
+                    <input type="file" id="fileInput" name="file" accept=".py" required>
+                </div>
+                <button type="submit" id="executeBtn" class="btn-execute">Execute Script</button>
+            </form>
+        </div>
+
+        <div id="loadingIndicator" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Executing script...</p>
+        </div>
+
+        <div id="results" class="results hidden">
+            <div class="result-header">
+                <h2>Execution Results</h2>
+                <span id="executionTime" class="execution-time"></span>
+            </div>
+            
+            <div class="output-section">
+                <h3>Output:</h3>
+                <pre id="output" class="output-box"></pre>
+            </div>
+
+            <div id="errorSection" class="error-section hidden">
+                <h3>Errors:</h3>
+                <pre id="error" class="error-box"></pre>
+            </div>
+        </div>
+
+        <div class="info-section">
+            <h3>ℹ️ Information</h3>
+            <ul>
+                <li>Maximum file size: 5MB</li>
+                <li>Execution timeout: 10 seconds</li>
+                <li>Allowed imports: time, math, json, random, datetime, collections, itertools, re</li>
+                <li>Dangerous operations are blocked for security</li>
+                <li>Files are automatically deleted after execution</li>
+            </ul>
+        </div>
+
+        <footer>
+            <a href="/logs" target="_blank" class="btn-logs">View Execution Logs</a>
+        </footer>
+    </div>
+
+    <script>
+        const uploadForm = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const fileName = document.getElementById('fileName');
+        const executeBtn = document.getElementById('executeBtn');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const results = document.getElementById('results');
+        const output = document.getElementById('output');
+        const error = document.getElementById('error');
+        const errorSection = document.getElementById('errorSection');
+        const executionTime = document.getElementById('executionTime');
+
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                fileName.textContent = this.files[0].name;
+            } else {
+                fileName.textContent = 'Choose a .py file';
+            }
+        });
+
+        uploadForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            if (!file.name.endsWith('.py')) {
+                alert('Only .py files are allowed');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            executeBtn.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+            results.classList.add('hidden');
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    output.textContent = data.output || '(No output)';
+                    
+                    if (data.error) {
+                        error.textContent = data.error;
+                        errorSection.classList.remove('hidden');
+                    } else {
+                        errorSection.classList.add('hidden');
+                    }
+
+                    executionTime.textContent = `Execution time: ${data.execution_time}s`;
+                    results.classList.remove('hidden');
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error occurred'));
+                }
+            } catch (err) {
+                alert('Network error: ' + err.message);
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                executeBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
