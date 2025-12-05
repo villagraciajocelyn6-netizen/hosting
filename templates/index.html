@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Python Script Executor</title>
+    <title>Python Script Executor - Live Terminal</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>🐍 Python Script Executor</h1>
-            <p>Upload and execute Python scripts safely in a sandboxed environment</p>
+            <p>Upload and execute Python scripts with live terminal output</p>
         </header>
 
         <div class="upload-section">
@@ -27,34 +27,37 @@
 
         <div id="loadingIndicator" class="loading hidden">
             <div class="spinner"></div>
-            <p>Executing script...</p>
+            <p>Uploading and starting execution...</p>
         </div>
 
-        <div id="results" class="results hidden">
-            <div class="result-header">
-                <h2>Execution Results</h2>
-                <span id="executionTime" class="execution-time"></span>
+        <div id="terminalSection" class="terminal-section hidden">
+            <div class="terminal-header">
+                <div class="terminal-buttons">
+                    <span class="terminal-button close"></span>
+                    <span class="terminal-button minimize"></span>
+                    <span class="terminal-button maximize"></span>
+                </div>
+                <div class="terminal-title">
+                    <span id="terminalFilename">Terminal</span>
+                    <span id="executionStatus" class="execution-status running">● Running</span>
+                </div>
+                <div class="terminal-time">
+                    <span id="executionTime">0.000s</span>
+                </div>
             </div>
-            
-            <div class="output-section">
-                <h3>Output:</h3>
-                <pre id="output" class="output-box"></pre>
-            </div>
-
-            <div id="errorSection" class="error-section hidden">
-                <h3>Errors:</h3>
-                <pre id="error" class="error-box"></pre>
+            <div id="terminal" class="terminal-body">
+                <div class="terminal-prompt">$ python <span id="scriptName"></span></div>
             </div>
         </div>
 
         <div class="info-section">
             <h3>ℹ️ Information</h3>
             <ul>
-                <li>Maximum file size: 5MB</li>
+                <li>Maximum file size: 50MB</li>
                 <li>Execution timeout: 10 seconds</li>
-                <li>Allowed imports: time, math, json, random, datetime, collections, itertools, re</li>
-                <li>Dangerous operations are blocked for security</li>
-                <li>Files are automatically deleted after execution</li>
+                <li>Live streaming output as script runs</li>
+                <li>All Python code executed without restrictions</li>
+                <li>Files automatically deleted after execution</li>
             </ul>
         </div>
 
@@ -69,11 +72,15 @@
         const fileName = document.getElementById('fileName');
         const executeBtn = document.getElementById('executeBtn');
         const loadingIndicator = document.getElementById('loadingIndicator');
-        const results = document.getElementById('results');
-        const output = document.getElementById('output');
-        const error = document.getElementById('error');
-        const errorSection = document.getElementById('errorSection');
+        const terminalSection = document.getElementById('terminalSection');
+        const terminal = document.getElementById('terminal');
+        const terminalFilename = document.getElementById('terminalFilename');
+        const scriptName = document.getElementById('scriptName');
         const executionTime = document.getElementById('executionTime');
+        const executionStatus = document.getElementById('executionStatus');
+
+        let startTime;
+        let timerInterval;
 
         fileInput.addEventListener('change', function() {
             if (this.files.length > 0) {
@@ -82,6 +89,21 @@
                 fileName.textContent = 'Choose a .py file';
             }
         });
+
+        function updateTimer() {
+            if (startTime) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(3);
+                executionTime.textContent = elapsed + 's';
+            }
+        }
+
+        function appendToTerminal(content, type = 'stdout') {
+            const line = document.createElement('div');
+            line.className = 'terminal-line ' + type;
+            line.textContent = content;
+            terminal.appendChild(line);
+            terminal.scrollTop = terminal.scrollHeight;
+        }
 
         uploadForm.addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -102,36 +124,76 @@
 
             executeBtn.disabled = true;
             loadingIndicator.classList.remove('hidden');
-            results.classList.add('hidden');
+            terminalSection.classList.add('hidden');
 
             try {
-                const response = await fetch('/upload', {
+                const uploadResponse = await fetch('/upload', {
                     method: 'POST',
                     body: formData
                 });
 
-                const data = await response.json();
+                const uploadData = await uploadResponse.json();
 
-                if (data.success) {
-                    output.textContent = data.output || '(No output)';
-                    
-                    if (data.error) {
-                        error.textContent = data.error;
-                        errorSection.classList.remove('hidden');
-                    } else {
-                        errorSection.classList.add('hidden');
-                    }
-
-                    executionTime.textContent = `Execution time: ${data.execution_time}s`;
-                    results.classList.remove('hidden');
-                } else {
-                    alert('Error: ' + (data.error || 'Unknown error occurred'));
+                if (!uploadData.success) {
+                    alert('Upload error: ' + (uploadData.error || 'Unknown error'));
+                    executeBtn.disabled = false;
+                    loadingIndicator.classList.add('hidden');
+                    return;
                 }
-            } catch (err) {
-                alert('Network error: ' + err.message);
-            } finally {
+
                 loadingIndicator.classList.add('hidden');
+                terminalSection.classList.remove('hidden');
+                
+                terminal.innerHTML = '<div class="terminal-prompt">$ python ' + uploadData.filename + '</div>';
+                
+                terminalFilename.textContent = uploadData.filename;
+                scriptName.textContent = uploadData.filename;
+                
+                executionStatus.className = 'execution-status running';
+                executionStatus.textContent = '● Running';
+                
+                startTime = Date.now();
+                executionTime.textContent = '0.000s';
+                timerInterval = setInterval(updateTimer, 50);
+
+                const eventSource = new EventSource('/execute/' + encodeURIComponent(uploadData.filepath));
+
+                eventSource.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'stdout') {
+                            appendToTerminal(data.content, 'stdout');
+                        } else if (data.type === 'stderr') {
+                            appendToTerminal(data.content, 'stderr');
+                        } else if (data.type === 'error') {
+                            appendToTerminal(data.content, 'error');
+                        } else if (data.type === 'complete') {
+                            clearInterval(timerInterval);
+                            executionTime.textContent = data.execution_time + 's';
+                            executionStatus.className = 'execution-status complete';
+                            executionStatus.textContent = '✓ Complete';
+                            eventSource.close();
+                            executeBtn.disabled = false;
+                        }
+                    } catch (e) {
+                        console.error('Parse error:', e);
+                    }
+                };
+
+                eventSource.onerror = function(error) {
+                    clearInterval(timerInterval);
+                    executionStatus.className = 'execution-status error';
+                    executionStatus.textContent = '✗ Error';
+                    eventSource.close();
+                    executeBtn.disabled = false;
+                };
+
+            } catch (err) {
+                clearInterval(timerInterval);
+                alert('Network error: ' + err.message);
                 executeBtn.disabled = false;
+                loadingIndicator.classList.add('hidden');
             }
         });
     </script>
