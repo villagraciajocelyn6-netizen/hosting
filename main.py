@@ -85,6 +85,16 @@ def execute_stream(filepath):
         output_buffer = []
         error_buffer = []
         
+        original_filename = os.path.basename(filepath).split('_', 1)[1] if '_' in os.path.basename(filepath) else os.path.basename(filepath)
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        separator = '=' * 60
+        
+        yield f"data: {{'type': 'stdout', 'content': {repr(separator)}}}\n\n"
+        yield f"data: {{'type': 'stdout', 'content': {repr(f'Timestamp: {timestamp}')}}\n\n"
+        yield f"data: {{'type': 'stdout', 'content': {repr(f'Filename: {original_filename}')}}\n\n"
+        yield f"data: {{'type': 'stdout', 'content': {repr('Output:')}}}\n\n"
+        
         try:
             import sys
             process = subprocess.Popen(
@@ -123,7 +133,6 @@ def execute_stream(filepath):
                         yield f"data: {{'type': 'stdout', 'content': {repr(line)}}}\n\n"
                     else:
                         error_buffer.append(line)
-                        yield f"data: {{'type': 'stderr', 'content': {repr(line)}}}\n\n"
                     
                 except queue.Empty:
                     if process.poll() is not None:
@@ -131,23 +140,33 @@ def execute_stream(filepath):
                     
                     if time.time() > timeout_time:
                         process.kill()
-                        yield f"data: {{'type': 'error', 'content': 'Execution timeout: Script exceeded {TIMEOUT} seconds'}}\n\n"
+                        error_buffer.append(f'Execution timeout: Script exceeded {TIMEOUT} seconds\n')
                         break
             
             process.wait(timeout=1)
+            
+            yield f"data: {{'type': 'stdout', 'content': {repr('')}}}\n\n"
+            yield f"data: {{'type': 'stdout', 'content': {repr('Error:')}}}\n\n"
+            
+            if error_buffer:
+                for error_line in error_buffer:
+                    yield f"data: {{'type': 'stderr', 'content': {repr(error_line)}}}\n\n"
+            
+            yield f"data: {{'type': 'stdout', 'content': {repr(separator)}}}\n\n"
+            yield f"data: {{'type': 'stdout', 'content': {repr('')}}}\n\n"
             
             execution_time = round(time.time() - start_time, 3)
             
             complete_output = ''.join(output_buffer)
             complete_error = ''.join(error_buffer)
             
-            original_filename = os.path.basename(filepath).split('_', 1)[1] if '_' in os.path.basename(filepath) else os.path.basename(filepath)
             log_execution(original_filename, complete_output, complete_error)
             
             yield f"data: {{'type': 'complete', 'execution_time': {execution_time}}}\n\n"
             
         except Exception as e:
-            yield f"data: {{'type': 'error', 'content': {repr(str(e))}}}\n\n"
+            yield f"data: {{'type': 'stderr', 'content': {repr(str(e))}}}\n\n"
+            yield f"data: {{'type': 'stdout', 'content': {repr(separator)}}}\n\n"
         
         finally:
             if os.path.exists(filepath):
