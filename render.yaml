@@ -1,10 +1,15 @@
 services:
   - type: web
-    name: python-executor
+    name: python-script-executor
     env: python
-    region: singapore
+    region: oregon
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn main:app --bind 0.0.0.0:10000 --workers 2 --timeout 120
+    startCommand: gunicorn -c gunicorn.conf.py main:app  # ← Changed this line
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+      - key: PYTHONUNBUFFERED
+        value: 1
+      - key: FLASK_ENV
+        value: production
+    autoDeploy: true
+    healthCheckPath: /health
